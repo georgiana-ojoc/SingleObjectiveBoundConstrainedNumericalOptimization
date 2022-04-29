@@ -3,11 +3,11 @@
 
 #define CHECKPOINTS     15
 #define COGNITION       1.0
-#define DIMENSIONS      10
+#define DIMENSIONS      20
 #define E               2.7182818284590452353602874713526625
 #define ERROR           10E-8
-#define EVALUATIONS     200000
-#define FUNCTIONS       1
+#define EVALUATIONS     1000000
+#define FUNCTIONS       12
 #define INERTIA         0.75
 #define INERTIA_DECAY   0.99
 #define INF             1.0e99
@@ -837,7 +837,6 @@ public:
 
 class PSO {
 private:
-    const unsigned char functionIndex;
     const unsigned char dimensions{};
     const unsigned int maximumEvaluations{};
     const double left{};
@@ -870,10 +869,10 @@ private:
     FILE *file;
 
 public:
-    PSO(const unsigned char functionIndex, const unsigned char dimensions, const unsigned int maximumEvaluations,
+    PSO(const unsigned char dimensions, const unsigned int maximumEvaluations,
         const double left, const double right, const unsigned char populationSize, const double inertia,
         const double cognition, const double social, const double inertiaDecay, const double speedDecay,
-        const double mutation, Function *function, FILE *file) : functionIndex(functionIndex), dimensions(dimensions),
+        const double mutation, Function *function, FILE *file) : dimensions(dimensions),
                                                                  maximumEvaluations(maximumEvaluations), left(left),
                                                                  right(right), populationSize(populationSize),
                                                                  inertia(inertia), cognition(cognition), social(social),
@@ -908,7 +907,7 @@ public:
                 ++checkpointIndex;
                 checkpoint = computeCheckpoint();
                 printf("Evaluations: %d, best: %.6f\n", function->getEvaluations(), bestEvaluation);
-                fprintf(file, "%.6E ", bestEvaluation);
+                fprintf(file, "%.6E ", bestEvaluation - function->getMinimum());
             }
             if (function->getEvaluations() >= maximumEvaluations) {
                 printf("Finished after %d evaluations\n", function->getEvaluations());
@@ -917,9 +916,9 @@ public:
             }
             if (fabs(populationEvaluation[i] - function->getMinimum()) <= ERROR) {
                 printf("~~~ Finished after %d evaluations\n", function->getEvaluations());
-                while (checkpointIndex < CHECKPOINTS) {
+                while (checkpointIndex <= CHECKPOINTS) {
                     ++checkpointIndex;
-                    fprintf(file, "%f ", ERROR);
+                    fprintf(file, "10E-8 ");
                 }
                 fprintf(file, "\n");
                 return false;
@@ -1055,13 +1054,13 @@ int main() {
             unsigned short randomIndex = (DIMENSIONS / 10 * (i + 1) * RUNS + j + 1) - RUNS;
             randomIndex = (randomIndex % 1000);
             srand(randomSeeds[randomIndex]);
-            printf("Am resetat seed-ul\n");
+            printf("Reset seed: %d\n", randomIndex);
             Function *function = functions.getFunction(i);
             function->resetEvaluations();
             printf("Function %d, run %d, minimum = %.1f:\n", i + 1, j + 1, function->getMinimum());
-            PSO pso(i, DIMENSIONS, EVALUATIONS, LEFT, RIGHT,
-                    POPULATION, INERTIA, COGNITION, SOCIAL, INERTIA_DECAY,
-                    SPEED_DECAY, MUTATION, function, file);
+            PSO pso(DIMENSIONS, EVALUATIONS, LEFT, RIGHT, POPULATION,
+                    INERTIA, COGNITION, SOCIAL, INERTIA_DECAY, SPEED_DECAY,
+                    MUTATION, function, file);
             pso.run(j);
             printf("\n");
         }
