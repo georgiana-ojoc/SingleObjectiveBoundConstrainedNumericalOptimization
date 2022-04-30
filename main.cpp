@@ -1,25 +1,31 @@
 #include <cmath>
 #include <string>
 
-#define CHECKPOINTS     15
-#define COGNITION       1.0
-#define DIMENSIONS      20
-#define E               2.7182818284590452353602874713526625
-#define ERROR           10E-8
-#define EVALUATIONS     1000000
-#define FUNCTIONS       12
-#define INERTIA         0.75
-#define INERTIA_DECAY   0.99
-#define INF             1.0e99
-#define LEFT            -100.0
-#define MUTATION        0.01
-#define PI              3.1415926535897932384626433832795029
-#define POPULATION      100
-#define RANDOM_SEEDS    1000
-#define RIGHT           100.0
-#define RUNS            30
-#define SOCIAL          2.05
-#define SPEED_DECAY     0.1
+#define ALGORITHM               "PRPSO"
+#define CHECKPOINTS             15
+#define COGNITION               2.05
+#define DIMENSIONS              20
+#define E                       2.7182818284590452353602874713526625
+#define EVALUATIONS             1000000
+#define FUNCTIONS               12
+#define INERTIA                 0.75
+#define INERTIA_DECAY           0.99
+#define INF                     1.0e99
+#define LEFT                    -100.0
+#define MUTATION                0.01
+#define PI                      3.1415926535897932384626433832795029
+#define POPULATION              100
+#define PSO_ALGORITHM           "PSO"
+#define PRPSO_ALGORITHM         "PRPSO"
+#define RANDOM_SEEDS            1000
+#define REGENERATION_ERROR      0.1
+#define RIGHT                   100.0
+#define RUNS                    30
+#define SOCIAL                  1.0
+#define SPEED_DECAY             0.1
+#define STOP_ERROR              10E-8
+#define STUCK_GENERATIONS       100
+#define STUCK_INDIVIDUALS       30
 
 using namespace std;
 
@@ -848,6 +854,7 @@ private:
     const double inertiaDecay;
     const double speedDecay;
     const double mutation;
+    double checkpointBestEvaluation;
     double bestEvaluation;
     unsigned char checkpointIndex;
     unsigned int checkpoint;
@@ -872,13 +879,11 @@ public:
     PSO(const unsigned char dimensions, const unsigned int maximumEvaluations,
         const double left, const double right, const unsigned char populationSize, const double inertia,
         const double cognition, const double social, const double inertiaDecay, const double speedDecay,
-        const double mutation, Function *function, FILE *file) : dimensions(dimensions),
-                                                                 maximumEvaluations(maximumEvaluations), left(left),
-                                                                 right(right), populationSize(populationSize),
-                                                                 inertia(inertia), cognition(cognition), social(social),
-                                                                 inertiaDecay(inertiaDecay), speedDecay(speedDecay),
-                                                                 mutation(mutation), bestEvaluation(INF),
-                                                                 checkpointIndex(0), function(function), file(file) {
+        const double mutation, Function *function, FILE *file) :
+            dimensions(dimensions), maximumEvaluations(maximumEvaluations), left(left), right(right),
+            populationSize(populationSize), inertia(inertia), cognition(cognition), social(social),
+            inertiaDecay(inertiaDecay), speedDecay(speedDecay), mutation(mutation), checkpointBestEvaluation(INF),
+            bestEvaluation(INF), checkpointIndex(0), function(function), file(file) {
         checkpoint = computeCheckpoint();
     }
 
@@ -900,21 +905,26 @@ public:
         double bestGenerationEvaluation = INF;
         for (unsigned char i = 0; i < populationSize; i++) {
             populationEvaluation[i] = function->apply(population[i]);
+            if (populationEvaluation[i] < checkpointBestEvaluation) {
+                checkpointBestEvaluation = populationEvaluation[i];
+            }
             if (populationEvaluation[i] < bestEvaluation) {
                 bestEvaluation = populationEvaluation[i];
             }
             if (function->getEvaluations() >= checkpoint) {
                 ++checkpointIndex;
                 checkpoint = computeCheckpoint();
-                printf("Evaluations: %d, best: %.6f\n", function->getEvaluations(), bestEvaluation);
+                printf("Evaluations: %d, checkpoint best: %.6f, best: %.6f\n", function->getEvaluations(),
+                       checkpointBestEvaluation, bestEvaluation);
                 fprintf(file, "%.6E ", bestEvaluation - function->getMinimum());
+                checkpointBestEvaluation = INF;
             }
             if (function->getEvaluations() >= maximumEvaluations) {
                 printf("Finished after %d evaluations\n", function->getEvaluations());
                 fprintf(file, "\n");
                 return false;
             }
-            if (fabs(populationEvaluation[i] - function->getMinimum()) <= ERROR) {
+            if (fabs(populationEvaluation[i] - function->getMinimum()) <= STOP_ERROR) {
                 printf("~~~ Finished after %d evaluations\n", function->getEvaluations());
                 while (checkpointIndex <= CHECKPOINTS) {
                     ++checkpointIndex;
@@ -1012,7 +1022,227 @@ public:
     }
 };
 
+class PRPSO {
+private:
+    const unsigned char dimensions{};
+    const unsigned int maximumEvaluations{};
+    const double left{};
+    const double right{};
+    const unsigned char populationSize;
+    const double initialInertia;
+    double inertia;
+    const double cognition;
+    const double social;
+    const double inertiaDecay;
+    const double speedDecay;
+    const double mutation;
+    const unsigned char maximumStuckIndividuals;
+    const double regenerationError;
+    unsigned int stuckGenerations;
+    unsigned int maximumStuckGenerations;
+    double checkpointBestEvaluation;
+    double bestEvaluation;
+    unsigned char checkpointIndex;
+    unsigned int checkpoint;
+
+    double pastPopulation[POPULATION][DIMENSIONS];
+    double population[POPULATION][DIMENSIONS];
+    double populationSpeed[POPULATION][DIMENSIONS];
+    double pastPopulationEvaluation[POPULATION];
+    double populationEvaluation[POPULATION];
+    double bestGenerationIndividual[DIMENSIONS];
+    double individualInertia[DIMENSIONS];
+    double pastIndividualDifference[DIMENSIONS];
+    double individualCognition[DIMENSIONS];
+    double bestIndividualDifference[DIMENSIONS];
+    double individualSocial[DIMENSIONS];
+    double randomSpeed[DIMENSIONS];
+
+    Function *function;
+    FILE *file;
+
+public:
+    PRPSO(const unsigned char dimensions, const unsigned int maximumEvaluations,
+          const double left, const double right, const unsigned char populationSize, const double inertia,
+          const double cognition, const double social, const double inertiaDecay, const double speedDecay,
+          const double mutation, const unsigned char maximumStuckIndividuals, const double regenerationError,
+          const unsigned int maximumStuckGenerations, Function *function, FILE *file) :
+            dimensions(dimensions), maximumEvaluations(maximumEvaluations), left(left), right(right),
+            populationSize(populationSize), initialInertia(inertia), inertia(inertia), cognition(cognition),
+            social(social), inertiaDecay(inertiaDecay), speedDecay(speedDecay), mutation(mutation),
+            maximumStuckIndividuals(maximumStuckIndividuals), regenerationError(regenerationError), stuckGenerations(0),
+            maximumStuckGenerations(maximumStuckGenerations), checkpointBestEvaluation(INF), bestEvaluation(INF),
+            checkpointIndex(0), function(function), file(file) {
+        checkpoint = computeCheckpoint();
+    }
+
+    [[nodiscard]] unsigned int computeCheckpoint() const {
+        return (unsigned int) (1 / pow(dimensions, fabs(checkpointIndex / 5.0 - 3.0)) *
+                               maximumEvaluations);
+    }
+
+    void generatePopulation() {
+        for (unsigned char i = 0; i < populationSize; i++) {
+            for (unsigned char j = 0; j < dimensions; j++) {
+                population[i][j] = random(left, right);
+                populationSpeed[i][j] = speedDecay * random(left, right);
+            }
+        }
+    }
+
+    void regeneratePopulation() {
+        generatePopulation();
+        inertia = initialInertia;
+    }
+
+    bool evaluatePopulation() {
+        double bestGenerationEvaluation = INF;
+        unsigned char stuckIndividuals = 0;
+        for (unsigned char i = 0; i < populationSize; i++) {
+            populationEvaluation[i] = function->apply(population[i]);
+            if (populationEvaluation[i] < checkpointBestEvaluation) {
+                checkpointBestEvaluation = populationEvaluation[i];
+            }
+            if (populationEvaluation[i] < bestEvaluation) {
+                bestEvaluation = populationEvaluation[i];
+            }
+            if (function->getEvaluations() >= checkpoint) {
+                ++checkpointIndex;
+                checkpoint = computeCheckpoint();
+                printf("Evaluations: %d, checkpoint best: %.6f, best: %.6f\n", function->getEvaluations(),
+                       checkpointBestEvaluation, bestEvaluation);
+                fprintf(file, "%.6E ", bestEvaluation - function->getMinimum());
+                checkpointBestEvaluation = INF;
+            }
+            if (function->getEvaluations() >= maximumEvaluations) {
+                printf("Finished after %d evaluations\n", function->getEvaluations());
+                fprintf(file, "\n");
+                return false;
+            }
+            if (fabs(populationEvaluation[i] - function->getMinimum()) <= STOP_ERROR) {
+                printf("~~~ Finished after %d evaluations\n", function->getEvaluations());
+                while (checkpointIndex <= CHECKPOINTS) {
+                    ++checkpointIndex;
+                    fprintf(file, "10E-8 ");
+                }
+                fprintf(file, "\n");
+                return false;
+            }
+            if (populationEvaluation[i] < bestGenerationEvaluation) {
+                bestGenerationEvaluation = populationEvaluation[i];
+                memcpy(bestGenerationIndividual, population[i], dimensions * sizeof(double));
+            }
+            if (populationEvaluation[i] - bestEvaluation <= regenerationError) {
+                ++stuckIndividuals;
+            }
+        }
+        if (stuckIndividuals >= maximumStuckIndividuals) {
+            ++stuckGenerations;
+        }
+        return true;
+    }
+
+    void updatePopulation() {
+        for (unsigned char i = 0; i < populationSize; i++) {
+            if (populationEvaluation[i] < pastPopulationEvaluation[i]) {
+                pastPopulationEvaluation[i] = populationEvaluation[i];
+                memcpy(pastPopulation[i], population[i], dimensions * sizeof(double));
+            }
+        }
+    }
+
+    static void multiply(const unsigned char length, double destination[], const double source[], double multiplier) {
+        for (unsigned char i = 0; i < length; i++) {
+            destination[i] = source[i] * multiplier;
+        }
+    }
+
+    static void difference(const unsigned char length, double destination[], const double first[],
+                           const double second[]) {
+        for (unsigned char i = 0; i < length; i++) {
+            destination[i] = first[i] - second[i];
+        }
+    }
+
+    void generateRandomSpeed() {
+        for (unsigned char i = 0; i < dimensions; i++) {
+            randomSpeed[i] = inertia * speedDecay * mutation * random(left, right);
+        }
+    }
+
+    void sumPopulationSpeed(unsigned char individual) {
+        for (unsigned char j = 0; j < dimensions; j++) {
+            populationSpeed[individual][j] = individualInertia[j] + individualCognition[j] + individualSocial[j] +
+                                             randomSpeed[j];
+        }
+    }
+
+    void simulatePopulation() {
+        for (unsigned char i = 0; i < populationSize; i++) {
+            multiply(dimensions, individualInertia, populationSpeed[i], inertia);
+            difference(dimensions, pastIndividualDifference, pastPopulation[i],
+                       population[i]);
+            multiply(dimensions, individualCognition, pastIndividualDifference,
+                     cognition * random01());
+            difference(dimensions, bestIndividualDifference, bestGenerationIndividual,
+                       population[i]);
+            multiply(dimensions, individualSocial, bestIndividualDifference,
+                     social * random01());
+            generateRandomSpeed();
+            sumPopulationSpeed(i);
+            for (unsigned char j = 0; j < dimensions; j++) {
+                population[i][j] += populationSpeed[i][j];
+                if (population[i][j] < left) {
+                    population[i][j] = left;
+                    populationSpeed[i][j] = 0;
+                } else {
+                    if (population[i][j] > right) {
+                        population[i][j] = right;
+                        populationSpeed[i][j] = 0;
+                    }
+                }
+            }
+        }
+        inertia *= inertiaDecay;
+    }
+
+    void run(unsigned char runIndex) {
+        generatePopulation();
+        if (!evaluatePopulation()) {
+            return;
+        }
+        if (stuckGenerations >= maximumStuckGenerations) {
+            stuckGenerations = 0;
+            regeneratePopulation();
+            if (!evaluatePopulation()) {
+                return;
+            }
+            printf("Regenerated population: %d, checkpoint best: %.6f, best: %.6f\n", function->getEvaluations(),
+                   checkpointBestEvaluation, bestEvaluation);
+        }
+        memcpy(pastPopulation, population, populationSize * dimensions * sizeof(double));
+        memcpy(pastPopulationEvaluation, populationEvaluation, populationSize * sizeof(double));
+        while (true) {
+            simulatePopulation();
+            if (!evaluatePopulation()) {
+                break;
+            }
+            if (stuckGenerations >= maximumStuckGenerations) {
+                stuckGenerations = 0;
+                regeneratePopulation();
+                if (!evaluatePopulation()) {
+                    break;
+                }
+                printf("Regenerated population: %d, checkpoint best: %.6f, best: %.6f\n", function->getEvaluations(),
+                       checkpointBestEvaluation, bestEvaluation);
+            }
+            updatePopulation();
+        }
+    }
+};
+
 void printParameters() {
+    printf("Algorithm: %s\n", ALGORITHM);
     printf("Dimensions: %d\n", DIMENSIONS);
     printf("Evaluations: %d\n", EVALUATIONS);
     printf("Runs: %d\n", RUNS);
@@ -1023,6 +1253,11 @@ void printParameters() {
     printf("Inertia decay: %.2f\n", INERTIA_DECAY);
     printf("Speed decay: %.2f\n", SPEED_DECAY);
     printf("Mutation: %.2f\n", MUTATION);
+    if (strcmp(ALGORITHM, PRPSO_ALGORITHM) == 0) {
+        printf("Regeneration error: %.2f\n", REGENERATION_ERROR);
+        printf("Stuck individuals: %d\n", STUCK_INDIVIDUALS);
+        printf("Stuck generations: %d\n", STUCK_GENERATIONS);
+    }
     printf("\n");
 }
 
@@ -1049,7 +1284,7 @@ int main() {
     fclose(file);
     Functions functions(DIMENSIONS);
     for (unsigned char i = 0; i < FUNCTIONS; i++) {
-        file = fopen(getFileName("PSO", i, DIMENSIONS).c_str(), "a");
+        file = fopen(getFileName(ALGORITHM, i, DIMENSIONS).c_str(), "w");
         for (unsigned char j = 0; j < RUNS; j++) {
             unsigned short randomIndex = (DIMENSIONS / 10 * (i + 1) * RUNS + j + 1) - RUNS;
             randomIndex = (randomIndex % 1000);
@@ -1058,10 +1293,19 @@ int main() {
             Function *function = functions.getFunction(i);
             function->resetEvaluations();
             printf("Function %d, run %d, minimum = %.1f:\n", i + 1, j + 1, function->getMinimum());
-            PSO pso(DIMENSIONS, EVALUATIONS, LEFT, RIGHT, POPULATION,
-                    INERTIA, COGNITION, SOCIAL, INERTIA_DECAY, SPEED_DECAY,
-                    MUTATION, function, file);
-            pso.run(j);
+            if (strcmp(ALGORITHM, PSO_ALGORITHM) == 0) {
+                PSO pso(DIMENSIONS, EVALUATIONS, LEFT, RIGHT,
+                        POPULATION, INERTIA, COGNITION, SOCIAL,
+                        INERTIA_DECAY, SPEED_DECAY, MUTATION, function, file);
+                pso.run(j);
+            } else if (strcmp(ALGORITHM, PRPSO_ALGORITHM) == 0) {
+                PRPSO prpso(DIMENSIONS, EVALUATIONS, LEFT, RIGHT,
+                            POPULATION, INERTIA, COGNITION, SOCIAL,
+                            INERTIA_DECAY, SPEED_DECAY, MUTATION,
+                            STUCK_INDIVIDUALS, REGENERATION_ERROR,
+                            STUCK_GENERATIONS, function, file);
+                prpso.run(j);
+            }
             printf("\n");
         }
         fclose(file);
