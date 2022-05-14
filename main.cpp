@@ -14,8 +14,8 @@
 #define INERTIA_DECAY               0.99
 #define INF                         1.0e99
 #define LEFT                        -100.0
-#define MINIMUM_INERTIA             0.1
-#define MINIMUM_TEMPERATURE         0.05
+#define MINIMUM_INERTIA             0.001
+#define MINIMUM_TEMPERATURE         0.001
 #define MAXIMUM_STUCK_GENERATIONS   100
 #define MINIMUM_STUCK_GENERATIONS   75
 #define MUTATION                    0.01
@@ -32,7 +32,7 @@
 #define SPEED_DECAY                 0.1
 #define STOP_ERROR                  10E-8
 #define STUCK_GENERATIONS_DECAY     0.9
-#define STUCK_INDIVIDUALS           30
+#define STUCK_INDIVIDUALS           10
 #define TEMPERATURE                 10.0
 #define TEMPERATURE_DECAY           0.7
 
@@ -1154,6 +1154,8 @@ public:
         }
         if (stuckIndividuals >= maximumStuckIndividuals) {
             ++stuckGenerations;
+        } else {
+            stuckGenerations = max(stuckGenerations - 1, 0u);
         }
         return true;
     }
@@ -1516,24 +1518,24 @@ void printParameters() {
     printf("Evaluations: %d\n", EVALUATIONS);
     printf("Runs: %d\n", RUNS);
     printf("Population: %d\n", POPULATION);
-    printf("Inertia: %.2f\n", INERTIA);
-    printf("Cognition: %.2f\n", COGNITION);
-    printf("Social: %.2f\n", SOCIAL);
-    printf("Inertia decay: %.2f\n", INERTIA_DECAY);
-    printf("Speed decay: %.2f\n", SPEED_DECAY);
-    printf("Mutation: %.2f\n", MUTATION);
+    printf("Inertia: %.3f\n", INERTIA);
+    printf("Cognition: %.3f\n", COGNITION);
+    printf("Social: %.3f\n", SOCIAL);
+    printf("Inertia decay: %.3f\n", INERTIA_DECAY);
+    printf("Speed decay: %.3f\n", SPEED_DECAY);
+    printf("Mutation: %.3f\n", MUTATION);
     if (algorithm.find(PRPSO_ALGORITHM) != string::npos) {
-        printf("Regeneration error: %.2f\n", REGENERATION_ERROR);
+        printf("Regeneration error: %.3f\n", REGENERATION_ERROR);
         printf("Stuck individuals: %d\n", STUCK_INDIVIDUALS);
         printf("Maximum stuck generations: %d\n", MAXIMUM_STUCK_GENERATIONS);
         printf("Minimum stuck generations: %d\n", MINIMUM_STUCK_GENERATIONS);
-        printf("Stuck generations decay: %.2f\n", STUCK_GENERATIONS_DECAY);
+        printf("Stuck generations decay: %.3f\n", STUCK_GENERATIONS_DECAY);
     }
     if (strcmp(algorithm.c_str(), EPRPSO_ALGORITHM) == 0) {
-        printf("Minimum inertia: %.2f\n", MINIMUM_INERTIA);
-        printf("Minimum temperature: %.2f\n", MINIMUM_TEMPERATURE);
-        printf("Temperature: %.2f\n", TEMPERATURE);
-        printf("Temperature decay: %.2f\n", TEMPERATURE_DECAY);
+        printf("Minimum inertia: %.3f\n", MINIMUM_INERTIA);
+        printf("Minimum temperature: %.3f\n", MINIMUM_TEMPERATURE);
+        printf("Temperature: %.3f\n", TEMPERATURE);
+        printf("Temperature decay: %.3f\n", TEMPERATURE_DECAY);
     }
     printf("\n");
 }
