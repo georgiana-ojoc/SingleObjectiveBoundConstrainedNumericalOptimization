@@ -19,7 +19,7 @@ def get_error_statistics(file_name, function):
 
 def main():
     algorithm = "EPRPSO"
-    dimensions = 20
+    dimensions = 10
     functions = 12
     with open(f"../{algorithm}/errors_{dimensions}.csv", 'w') as file:
         csv_writer = csv.writer(file)
