@@ -3,4 +3,4 @@ project(SOBCNO)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(SOBCNO geneticAlgorithm.cpp)
+add_executable(SOBCNO main.cpp)

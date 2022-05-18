@@ -20,20 +20,20 @@
 #define RANDOM_SEEDS                1000
 #define REGENERATION_ERROR          0.1
 #define RIGHT                       100.0
-#define RUNS                        3
+#define RUNS                        1
 #define STOP_ERROR                  10E-8
 
 using namespace std;
 using namespace std::chrono;
 
 double crossover = 0.3;
-double mutation = 0.01;
+double mutation = 0.1;
 const unsigned char cuts = 5;
-const unsigned char tournament = 20;
+const unsigned char tournament = 5;
 
 constexpr unsigned char bits = 8;
-constexpr unsigned short generations = 20;
-constexpr unsigned short individuals = 20;
+constexpr unsigned short generations = 40;
+constexpr unsigned short individuals = 10;
 constexpr unsigned short runs = 1;
 
 unsigned char naturalRandom(unsigned char size) {
@@ -1412,7 +1412,6 @@ public:
     }
 
     void run() {
-        fprintf(file, "\n");
         setFirstValue();
         generateRandomPopulation();
         computeMinimum();

@@ -1,6 +1,8 @@
 import csv
 import statistics
 
+import numpy
+
 
 def get_errors(file_name):
     errors = []
@@ -23,9 +25,12 @@ def main():
     functions = 12
     with open(f"../{algorithm}/errors_{dimensions}.csv", 'w') as file:
         csv_writer = csv.writer(file)
+        total_steps = numpy.empty(shape=(0, 6))
         for function in range(1, functions + 1):
             steps = get_error_statistics(f"../{algorithm}/{algorithm}_{function}_{dimensions}.txt", function)
             csv_writer.writerow(steps)
+            total_steps = numpy.vstack((total_steps, numpy.array([steps], dtype=float)))
+        csv_writer.writerow(numpy.sum(total_steps, axis=0))
 
 
 if __name__ == '__main__':

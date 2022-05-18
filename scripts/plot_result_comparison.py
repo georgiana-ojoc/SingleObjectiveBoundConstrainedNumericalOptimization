@@ -24,7 +24,7 @@ def main():
     first_algorithm = "PRPSO"
     second_algorithm = "EPRPSO"
     dimensions = 20
-    function = 7
+    function = 11
     errors = []
     evaluations = list(range(1, 17))
     errors += [get_errors(f"../{first_algorithm}/{first_algorithm}_{function}_{dimensions}.txt")]
